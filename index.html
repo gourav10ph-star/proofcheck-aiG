@@ -54,6 +54,14 @@ function toB64(file){
   });
 }
 
+function readAsText(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=()=>res(r.result);
+    r.onerror=rej; r.readAsText(file);
+  });
+}
+
 function deduplicateIssues(issues){
   const seen=[];
   return issues.filter(iss=>{
@@ -151,15 +159,6 @@ function CopyBox({text}){
   );
 }
 
-// ── Read file as text ─────────────────────────────────────────────────────────
-function readAsText(file){
-  return new Promise((res,rej)=>{
-    const r=new FileReader();
-    r.onload=()=>res(r.result);
-    r.onerror=rej; r.readAsText(file);
-  });
-}
-
 function App(){
   const [f1,setF1]=useState(null);
   const [f2,setF2]=useState(null);
@@ -199,22 +198,30 @@ function App(){
 
   const runCheck=async()=>{
     if(!f1||!f2){setError("Please upload both documents first.");return;}
-    if(!apiKey.trim()){setError("Please enter your Gemini API key.");return;}
+    if(!apiKey.trim()){setError("Please enter your Groq API key.");return;}
     setError("");setReport(null);setReportTxt("");setLoading(true);
 
     try{
       setStatus("📂 Reading documents...");
 
-      // Read file contents
-      let text1="", text2="";
-      const parts=[];
+      // Extract text from files
+      const extractText=async(f)=>{
+        if(f.type.startsWith("image/")||f.type==="application/pdf"){
+          return `[${f.type.startsWith("image/")?"Image":"PDF"} file: ${f.name} — describe content based on filename]`;
+        }
+        try{ return await readAsText(f.raw); }
+        catch{ return `[File: ${f.name}]`; }
+      };
 
-      // Build prompt text
+      const text1=await extractText(f1);
+      const text2=await extractText(f2);
+
       const ruleText=rules.trim()||"Check spelling, grammar, formatting, and compare both documents.";
+
       const prompt=
         `You are a senior professional proofreader.\n\n`+
-        `Document A = REFERENCE (${f1.name}) — correct/approved version\n`+
-        `Document B = NEW document (${f2.name}) — needs proofreading\n\n`+
+        `Document A = REFERENCE (${f1.name}):\n${text1.substring(0,4000)}\n\n`+
+        `Document B = NEW document to proofread (${f2.name}):\n${text2.substring(0,4000)}\n\n`+
         `Rules:\n${ruleText}\n\n`+
         `STRICT DEDUPLICATION:\n`+
         `1. Every unique issue appears ONCE only\n`+
@@ -224,51 +231,30 @@ function App(){
         `Return ONLY valid JSON, no markdown, no explanation:\n`+
         `{"match_score":<0-100>,"overall_comment":"<2-3 sentences>","summary":{"total_issues":<n>,"spelling":<n>,"grammar":<n>,"formatting":<n>,"style":<n>},"issues":[{"type":"spelling|grammar|formatting|style|match","description":"<issue>","location":"<where>","suggestion":"<fix>"}]}`;
 
-      // Add prompt as first text part
-      parts.push({text: prompt});
-
       setStatus("🤖 AI is comparing and proofreading...");
 
-      // Build inline_data parts for images, text for others
-      const addFilePart=async(f,label)=>{
-        parts.push({text:`\n${label}:`});
-        if(f.type.startsWith("image/")||f.type==="application/pdf"){
-          parts.push({inline_data:{mime_type:f.type,data:f.b64}});
-        } else {
-          // txt files — read as text
-          try{
-            const txt=await readAsText(f.raw);
-            parts.push({text: txt.substring(0,8000)});
-          }catch{
-            parts.push({text:`[File: ${f.name}]`});
-          }
-        }
-      };
-
-      await addFilePart(f1,"📄 Document A — REFERENCE");
-      await addFilePart(f2,"📝 Document B — NEW (proofread this)");
-
-      // Call Gemini API
-      const res=await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey.trim()}`,
-        {
-          method:"POST",
-          headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({
-            contents:[{parts}],
-            generationConfig:{temperature:0.1,maxOutputTokens:2000}
-          })
-        }
-      );
+      const res=await fetch("https://api.groq.com/openai/v1/chat/completions",{
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json",
+          "Authorization":`Bearer ${apiKey.trim()}`
+        },
+        body:JSON.stringify({
+          model:"llama-3.3-70b-versatile",
+          messages:[{role:"user",content:prompt}],
+          temperature:0.1,
+          max_tokens:2000
+        })
+      });
 
       if(!res.ok){
         const e=await res.json();
-        throw new Error(e?.error?.message||"Gemini API error: "+res.status);
+        throw new Error(e?.error?.message||"Groq API error: "+res.status);
       }
 
       const data=await res.json();
-      const raw=data.candidates?.[0]?.content?.parts?.[0]?.text||"";
-      if(!raw)throw new Error("Empty response from Gemini. Please try again.");
+      const raw=data.choices?.[0]?.message?.content||"";
+      if(!raw)throw new Error("Empty response. Please try again.");
 
       const clean=raw.replace(/```json|```/g,"").trim();
       const result=JSON.parse(clean);
@@ -304,7 +290,7 @@ function App(){
                 ProofCheck <span style={{color:C.accent}}>AI</span>
               </div>
               <div style={{fontSize:10,color:C.muted,fontFamily:"DM Mono,monospace",letterSpacing:2,marginTop:3}}>
-                AUTOMATED DOCUMENT PROOFREADING · POWERED BY GEMINI
+                AUTOMATED DOCUMENT PROOFREADING · POWERED BY GROQ (FREE)
               </div>
             </div>
           </div>
@@ -316,11 +302,11 @@ function App(){
         {/* API Key */}
         <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:20,marginBottom:22}}>
           <div style={{fontSize:10,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:C.muted,marginBottom:6}}>
-            🔑 Google Gemini API Key <span style={{color:C.green,fontWeight:400,fontSize:10}}>(Free — no credit card needed)</span>
+            🔑 Groq API Key{" "}<span style={{color:C.green,fontWeight:600,fontSize:11}}>✅ 100% Free · No credit card</span>
           </div>
           <div style={{display:"flex",gap:10,marginBottom:8}}>
             <input type={showKey?"text":"password"} value={apiKey} onChange={e=>setApiKey(e.target.value)}
-              placeholder="AIza..."
+              placeholder="gsk_..."
               style={{flex:1,padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:8,
                 background:C.surface,color:C.ink,fontSize:12,outline:"none"}}/>
             <button onClick={()=>setShowKey(!showKey)}
@@ -330,10 +316,9 @@ function App(){
             </button>
           </div>
           <div style={{fontSize:11,color:C.muted,lineHeight:1.8}}>
-            Get your free key at{" "}
-            <a href="https://aistudio.google.com/app/apikey" target="_blank"
-              style={{color:C.accent,fontWeight:600}}>aistudio.google.com</a>
-            {" "}→ Sign in with Google → Click <strong>"Get API Key"</strong> → <strong>"Create API key"</strong>
+            Get free key at{" "}
+            <a href="https://console.groq.com" target="_blank" style={{color:C.accent,fontWeight:600}}>console.groq.com</a>
+            {" "}→ Sign up with Gmail → <strong>API Keys</strong> → <strong>Create API Key</strong> → Copy key starting with <strong>gsk_</strong>
           </div>
         </div>
 
@@ -345,6 +330,9 @@ function App(){
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
             <DropZone label="Reference Document" icon="📄" file={f1} onFile={setF1}/>
             <DropZone label="New Document" icon="📝" file={f2} onFile={setF2}/>
+          </div>
+          <div style={{fontSize:11,color:C.muted,marginTop:8,fontStyle:"italic"}}>
+            ⚠️ Note: For best results upload <strong>TXT files</strong>. PDF/JPG text will be analysed by filename only with Groq.
           </div>
         </div>
 
