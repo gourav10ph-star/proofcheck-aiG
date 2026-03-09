@@ -1,9 +1,464 @@
-Create index.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ProofCheck AI — Document Proofreading</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#f5f0e8;color:#1a1612;font-family:Georgia,serif;min-height:100vh;padding-bottom:60px}
+textarea,input,button{font-family:inherit}
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:#ede8dc}
+::-webkit-scrollbar-thumb{background:#d4cdc0;border-radius:3px}
+</style>
+</head>
+<body>
+<div id="root"></div>
 
-Script
+<script type="text/babel">
+const { useState, useRef, useCallback } = React;
 
-Standalone single-file GitHub Pages version of ProofCheck AIG
-proofcheck-github.html
+const C = {
+  bg:"#f5f0e8", surface:"#ede8dc", card:"#ffffff",
+  border:"#d4cdc0", ink:"#1a1612", muted:"#8a8278",
+  accent:"#c84b2f", green:"#2a7a4b", amber:"#c47f17", blue:"#2b5ea7", tag:"#f0ebe0"
+};
 
-Presented file
-Done
+const QUICK_RULES = [
+  {e:"✏️",l:"Spelling",    r:"Check all spelling errors"},
+  {e:"📖",l:"Grammar",     r:"Check grammar and punctuation"},
+  {e:"🎩",l:"Formal Tone", r:"Ensure formal professional tone"},
+  {e:"📐",l:"Formatting",  r:"Check formatting: headings, spacing, alignment"},
+  {e:"🔄",l:"Compare",     r:"Compare content vs reference and flag differences"},
+  {e:"💬",l:"Active Voice",r:"Flag passive voice, suggest active alternatives"},
+  {e:"🏷️",l:"Terminology", r:"Verify consistent terminology and proper nouns"},
+];
+
+const TYPE_STYLE = {
+  spelling:  {color:C.accent, bg:"#fdf0ed", label:"Spelling"},
+  grammar:   {color:C.amber,  bg:"#fdf5e6", label:"Grammar"},
+  formatting:{color:C.blue,   bg:"#eef2fa", label:"Formatting"},
+  style:     {color:C.green,  bg:"#edf6f1", label:"Style"},
+  match:     {color:C.green,  bg:"#edf6f1", label:"Difference"},
+};
+
+function toB64(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=()=>res(r.result.split(",")[1]);
+    r.onerror=rej; r.readAsDataURL(file);
+  });
+}
+
+function deduplicateIssues(issues){
+  const seen=[];
+  return issues.filter(iss=>{
+    const key=(iss.description||"").toLowerCase().replace(/\s+/g," ").substring(0,60);
+    const isDup=seen.some(s=>{
+      if(s.type!==iss.type)return false;
+      const longer=Math.max(key.length,s.key.length);
+      if(longer===0)return true;
+      return [...key].filter((c,i)=>s.key[i]===c).length/longer>0.7;
+    });
+    if(!isDup)seen.push({type:iss.type,key});
+    return !isDup;
+  });
+}
+
+function copyText(text){
+  if(navigator.clipboard?.writeText)return navigator.clipboard.writeText(text);
+  const ta=document.createElement("textarea");
+  ta.value=text; ta.style.cssText="position:fixed;opacity:0";
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  document.execCommand("copy"); document.body.removeChild(ta);
+  return Promise.resolve();
+}
+
+function DropZone({label,icon,file,onFile}){
+  const ref=useRef();
+  const [drag,setDrag]=useState(false);
+  const handle=useCallback(async(f)=>{
+    if(!f)return;
+    const b64=await toB64(f);
+    onFile({name:f.name,type:f.type,b64});
+  },[onFile]);
+  return(
+    <div onClick={()=>ref.current.click()}
+      onDragOver={e=>{e.preventDefault();setDrag(true);}}
+      onDragLeave={()=>setDrag(false)}
+      onDrop={e=>{e.preventDefault();setDrag(false);handle(e.dataTransfer.files[0]);}}
+      style={{border:`2px dashed ${file?C.green:drag?C.accent:C.border}`,borderRadius:12,
+        background:file?"#f0f9f4":drag?"#fdf0ed":C.card,padding:"28px 16px",textAlign:"center",
+        cursor:"pointer",transition:"all 0.2s",minHeight:140,
+        display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8}}>
+      <input ref={ref} type="file" accept=".pdf,.jpg,.jpeg,.png,.txt"
+        style={{display:"none"}} onChange={e=>handle(e.target.files[0])}/>
+      <div style={{fontSize:32}}>{file?"✅":icon}</div>
+      <div style={{fontSize:10,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:C.muted}}>{label}</div>
+      {file
+        ?<div style={{fontSize:11,color:C.green,fontWeight:600,wordBreak:"break-all",maxWidth:"90%"}}>{file.name}</div>
+        :<div style={{fontSize:11,color:C.muted}}>PDF · JPG · PNG · TXT<br/>click or drag &amp; drop</div>
+      }
+    </div>
+  );
+}
+
+function IssueCard({issue,idx}){
+  const s=TYPE_STYLE[issue.type]||TYPE_STYLE.style;
+  return(
+    <div style={{background:s.bg,border:`1px solid ${s.color}33`,borderLeft:`3px solid ${s.color}`,
+      borderRadius:8,padding:"12px 14px",display:"flex",gap:12,alignItems:"flex-start"}}>
+      <div style={{minWidth:22,height:22,borderRadius:4,background:s.color,color:"#fff",
+        fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{idx}</div>
+      <div style={{flex:1}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5,flexWrap:"wrap"}}>
+          <span style={{fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:1.5,
+            color:s.color,background:s.color+"18",borderRadius:4,padding:"2px 7px"}}>{s.label}</span>
+          {issue.location&&<span style={{fontSize:10,color:C.muted}}>📍 {issue.location}</span>}
+        </div>
+        <div style={{fontSize:13,color:C.ink,lineHeight:1.6,marginBottom:issue.suggestion?8:0}}>{issue.description}</div>
+        {issue.suggestion&&(
+          <div style={{fontSize:12,color:C.green,background:"#edf6f1",
+            borderRadius:6,padding:"6px 10px",borderLeft:`2px solid ${C.green}`}}>
+            💡 <strong>Fix:</strong> {issue.suggestion}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CopyBox({text}){
+  const [copied,setCopied]=useState(false);
+  const handle=async()=>{
+    await copyText(text); setCopied(true); setTimeout(()=>setCopied(false),2500);
+  };
+  return(
+    <div style={{position:"relative"}}>
+      <textarea readOnly value={text} style={{width:"100%",minHeight:220,padding:"12px 14px",
+        background:"#f8f5ef",border:`1px solid ${C.border}`,borderRadius:8,
+        fontFamily:"monospace",fontSize:11,color:C.ink,resize:"vertical",lineHeight:1.7,outline:"none"}}/>
+      <button onClick={handle} style={{position:"absolute",top:10,right:10,padding:"5px 12px",
+        borderRadius:6,background:copied?C.green:C.accent,color:"#fff",border:"none",
+        fontSize:11,fontWeight:700,cursor:"pointer",transition:"background 0.2s"}}>
+        {copied?"✅ Copied!":"📋 Copy All"}
+      </button>
+    </div>
+  );
+}
+
+function App(){
+  const [f1,setF1]=useState(null);
+  const [f2,setF2]=useState(null);
+  const [apiKey,setApiKey]=useState("");
+  const [showKey,setShowKey]=useState(false);
+  const [rules,setRules]=useState("");
+  const [active,setActive]=useState([]);
+  const [loading,setLoading]=useState(false);
+  const [statusMsg,setStatus]=useState("");
+  const [error,setError]=useState("");
+  const [report,setReport]=useState(null);
+  const [reportTxt,setReportTxt]=useState("");
+  const [tab,setTab]=useState("visual");
+
+  const toggleRule=(rule)=>{
+    const isOn=active.includes(rule);
+    const next=isOn?active.filter(r=>r!==rule):[...active,rule];
+    setActive(next);
+    const manual=rules.split("\n").filter(l=>!QUICK_RULES.some(q=>l.includes(q.r))).join("\n").trim();
+    const tags=next.map(r=>"• "+r).join("\n");
+    setRules([manual,tags].filter(Boolean).join("\n"));
+  };
+
+  const buildContent=()=>{
+    const ruleText=rules.trim()||"Check spelling, grammar, formatting, and compare both documents.";
+    const blocks=[];
+    blocks.push({type:"text",text:
+      `You are a senior professional proofreader.\n\n`+
+      `Document A = REFERENCE (${f1.name}) — correct/approved version\n`+
+      `Document B = NEW document (${f2.name}) — needs proofreading\n\n`+
+      `Rules:\n${ruleText}\n\n`+
+      `STRICT DEDUPLICATION:\n`+
+      `1. Every unique issue appears ONCE only\n`+
+      `2. Never report same problem under two types\n`+
+      `3. Assign to most specific: spelling > grammar > formatting > style > match\n`+
+      `4. Merge issues that are the same underlying problem\n\n`+
+      `Return ONLY valid JSON, no markdown:\n`+
+      `{"match_score":<0-100>,"overall_comment":"<2-3 sentences>","summary":{"total_issues":<n>,"spelling":<n>,"grammar":<n>,"formatting":<n>,"style":<n>},"issues":[{"type":"spelling|grammar|formatting|style|match","description":"<issue>","location":"<where>","suggestion":"<fix>"}]}`
+    });
+    const addDoc=(f,label)=>{
+      blocks.push({type:"text",text:`\n${label}:`});
+      if(f.type.startsWith("image/")){
+        blocks.push({type:"image",source:{type:"base64",media_type:f.type,data:f.b64}});
+      } else if(f.type==="application/pdf"){
+        blocks.push({type:"document",source:{type:"base64",media_type:"application/pdf",data:f.b64}});
+      } else {
+        try{blocks.push({type:"text",text:decodeURIComponent(escape(atob(f.b64))).substring(0,8000)});}
+        catch{blocks.push({type:"text",text:`[File: ${f.name}]`});}
+      }
+    };
+    addDoc(f1,"📄 Document A — REFERENCE");
+    addDoc(f2,"📝 Document B — NEW (proofread this)");
+    return blocks;
+  };
+
+  const buildTxt=(r)=>{
+    let t=`PROOFCHECK AI — PROOFREADING REPORT\n${"=".repeat(44)}\n`;
+    t+=`Date      : ${new Date().toLocaleString()}\n`;
+    t+=`Reference : ${f1?.name}\nNew Doc   : ${f2?.name}\n${"─".repeat(44)}\n`;
+    t+=`Match Score  : ${r.match_score}%\nTotal Issues : ${r.issues.length}\n`;
+    t+=`  Spelling   : ${r.summary?.spelling??0}\n  Grammar    : ${r.summary?.grammar??0}\n`;
+    t+=`  Formatting : ${r.summary?.formatting??0}\n  Style      : ${r.summary?.style??0}\n`;
+    t+=`${"─".repeat(44)}\nSUMMARY:\n${r.overall_comment||"N/A"}\n${"─".repeat(44)}\nISSUES:\n\n`;
+    t+=r.issues.map((iss,i)=>
+      `${i+1}. [${(iss.type||"").toUpperCase()}]\n   Issue    : ${iss.description}\n   Location : ${iss.location||"N/A"}\n   Fix      : ${iss.suggestion||"N/A"}`
+    ).join("\n\n");
+    return t;
+  };
+
+  const runCheck=async()=>{
+    if(!f1||!f2){setError("Please upload both documents first.");return;}
+    if(!apiKey.trim()){setError("Please enter your Anthropic API key.");return;}
+    setError("");setReport(null);setReportTxt("");setLoading(true);setStatus("📂 Reading documents...");
+    try{
+      setStatus("🤖 AI is comparing and proofreading...");
+      const res=await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json",
+          "x-api-key":apiKey.trim(),
+          "anthropic-version":"2023-06-01",
+          "anthropic-dangerous-direct-browser-access":"true"
+        },
+        body:JSON.stringify({model:"claude-opus-4-5",max_tokens:2000,
+          messages:[{role:"user",content:buildContent()}]}),
+      });
+      if(!res.ok){const e=await res.json();throw new Error(e?.error?.message||"API error "+res.status);}
+      const data=await res.json();
+      const raw=data.content.map(b=>b.text||"").join("");
+      const result=JSON.parse(raw.replace(/```json|```/g,"").trim());
+      result.issues=deduplicateIssues(result.issues||[]);
+      result.summary.total_issues=result.issues.length;
+      setReport(result);setReportTxt(buildTxt(result));setStatus("");
+    }catch(e){setError("❌ "+e.message);}
+    finally{setLoading(false);}
+  };
+
+  const reset=()=>{
+    setF1(null);setF2(null);setRules("");setActive([]);
+    setError("");setReport(null);setReportTxt("");setStatus("");setTab("visual");
+  };
+
+  const mc=report?(report.match_score>=80?C.green:report.match_score>=50?C.amber:C.accent):C.green;
+
+  return(
+    <div style={{background:C.bg,minHeight:"100vh",fontFamily:"Georgia,serif",color:C.ink}}>
+      <div style={{maxWidth:820,margin:"0 auto",padding:"0 20px 60px"}}>
+
+        {/* Header */}
+        <div style={{padding:"36px 0 24px",borderBottom:`2px solid ${C.ink}`,marginBottom:32}}>
+          <div style={{display:"flex",alignItems:"flex-end",gap:12,marginBottom:6}}>
+            <span style={{fontSize:34}}>🔍</span>
+            <div>
+              <div style={{fontSize:26,fontWeight:700,letterSpacing:-0.5,lineHeight:1,fontFamily:"Syne,sans-serif"}}>
+                ProofCheck <span style={{color:C.accent}}>AI</span>
+              </div>
+              <div style={{fontSize:10,color:C.muted,fontFamily:"DM Mono,monospace",letterSpacing:2,marginTop:3}}>
+                AUTOMATED DOCUMENT PROOFREADING
+              </div>
+            </div>
+          </div>
+          <p style={{fontSize:13,color:C.muted,fontStyle:"italic",marginTop:8}}>
+            Upload two documents → AI compares, checks & generates a clean deduplicated report
+          </p>
+        </div>
+
+        {/* API Key */}
+        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:20,marginBottom:22}}>
+          <div style={{fontSize:10,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:C.muted,marginBottom:10}}>
+            🔑 Anthropic API Key
+          </div>
+          <div style={{display:"flex",gap:10,marginBottom:8}}>
+            <input type={showKey?"text":"password"} value={apiKey} onChange={e=>setApiKey(e.target.value)}
+              placeholder="sk-ant-api03-..."
+              style={{flex:1,padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:8,
+                background:C.surface,color:C.ink,fontSize:12,outline:"none"}}/>
+            <button onClick={()=>setShowKey(!showKey)}
+              style={{padding:"9px 14px",border:`1px solid ${C.border}`,borderRadius:8,
+                background:C.surface,color:C.muted,fontSize:12,cursor:"pointer"}}>
+              {showKey?"🙈 Hide":"👁 Show"}
+            </button>
+          </div>
+          <div style={{fontSize:11,color:C.muted,lineHeight:1.6}}>
+            Get a free key at{" "}
+            <a href="https://console.anthropic.com" target="_blank"
+              style={{color:C.accent}}>console.anthropic.com</a>
+            {" "}→ your key is never stored, only used for this session.
+          </div>
+        </div>
+
+        {/* Upload */}
+        <div style={{marginBottom:22}}>
+          <div style={{fontSize:10,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:C.muted,marginBottom:10}}>
+            Step 1 — Upload Documents
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+            <DropZone label="Reference Document" icon="📄" file={f1} onFile={setF1}/>
+            <DropZone label="New Document" icon="📝" file={f2} onFile={setF2}/>
+          </div>
+        </div>
+
+        {/* Rules */}
+        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:20,marginBottom:18}}>
+          <div style={{fontSize:10,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:C.muted,marginBottom:12}}>
+            Step 2 — Set Rules (optional)
+          </div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:12}}>
+            {QUICK_RULES.map(q=>{
+              const on=active.includes(q.r);
+              return(
+                <button key={q.r} onClick={()=>toggleRule(q.r)}
+                  style={{padding:"5px 12px",borderRadius:20,
+                    border:`1px solid ${on?C.accent:C.border}`,
+                    background:on?C.accent:C.tag,color:on?"#fff":C.ink,
+                    fontSize:11,cursor:"pointer",fontWeight:on?600:400,transition:"all 0.15s"}}>
+                  {q.e} {q.l}
+                </button>
+              );
+            })}
+          </div>
+          <textarea value={rules} onChange={e=>setRules(e.target.value)}
+            placeholder="Or type custom rules... e.g. Company name must be 'Acme Corp', 12pt font, British spelling..."
+            style={{width:"100%",minHeight:60,padding:"10px 12px",border:`1px solid ${C.border}`,
+              borderRadius:8,background:C.surface,color:C.ink,fontSize:12,resize:"vertical",
+              outline:"none",lineHeight:1.7}}/>
+        </div>
+
+        {/* Run */}
+        <button onClick={runCheck} disabled={loading||!f1||!f2||!apiKey}
+          style={{width:"100%",padding:"14px",marginBottom:16,
+            background:loading||!f1||!f2||!apiKey?C.border:C.accent,
+            color:loading||!f1||!f2||!apiKey?C.muted:"#fff",
+            border:"none",borderRadius:10,fontSize:15,fontWeight:700,
+            cursor:loading||!f1||!f2||!apiKey?"not-allowed":"pointer",transition:"all 0.2s"}}>
+          {loading?"⏳ Analyzing documents...":"⚡ Run AI Proofreading"}
+        </button>
+
+        {loading&&(
+          <div style={{marginBottom:20}}>
+            <div style={{height:3,background:C.border,borderRadius:3,overflow:"hidden",marginBottom:10}}>
+              <div style={{height:"100%",background:C.accent,borderRadius:3,
+                animation:"prog 1.8s ease-in-out infinite"}}/>
+            </div>
+            <div style={{textAlign:"center",fontSize:12,color:C.muted,fontStyle:"italic"}}>{statusMsg}</div>
+          </div>
+        )}
+        <style>{`@keyframes prog{0%{width:5%;margin-left:0}50%{width:55%;margin-left:20%}100%{width:5%;margin-left:95%}}`}</style>
+
+        {error&&(
+          <div style={{background:"#fdf0ed",border:`1px solid ${C.accent}44`,
+            borderLeft:`3px solid ${C.accent}`,borderRadius:8,
+            padding:"12px 16px",fontSize:13,color:C.accent,marginBottom:20}}>{error}</div>
+        )}
+
+        {/* Report */}
+        {report&&(
+          <div>
+            <div style={{borderTop:`2px solid ${C.ink}`,paddingTop:22,marginBottom:20}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:12}}>
+                <div>
+                  <div style={{fontSize:20,fontWeight:700,fontFamily:"Syne,sans-serif"}}>📋 Proofreading Report</div>
+                  <div style={{fontSize:11,color:C.muted,marginTop:3}}>{new Date().toLocaleString()}</div>
+                </div>
+                <div style={{textAlign:"center",background:C.card,border:`2px solid ${mc}`,borderRadius:10,padding:"10px 18px"}}>
+                  <div style={{fontSize:26,fontWeight:800,color:mc}}>{report.match_score}%</div>
+                  <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1}}>Match Score</div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:18}}>
+              {[
+                {l:"Total",v:report.issues.length,c:C.accent},
+                {l:"Spelling",v:report.summary?.spelling,c:C.accent},
+                {l:"Grammar",v:report.summary?.grammar,c:C.amber},
+                {l:"Formatting",v:report.summary?.formatting,c:C.blue},
+                {l:"Style",v:report.summary?.style,c:C.green},
+              ].map(s=>(
+                <div key={s.l} style={{background:C.card,border:`1px solid ${C.border}`,
+                  borderRadius:8,padding:"10px 14px",textAlign:"center",minWidth:70}}>
+                  <div style={{fontSize:22,fontWeight:800,color:s.c}}>{s.v??0}</div>
+                  <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1}}>{s.l}</div>
+                </div>
+              ))}
+            </div>
+
+            {report.overall_comment&&(
+              <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,
+                padding:"13px 16px",marginBottom:18,fontSize:13,color:C.ink,lineHeight:1.7,fontStyle:"italic"}}>
+                💬 {report.overall_comment}
+              </div>
+            )}
+
+            <div style={{display:"flex",gap:0,marginBottom:16,border:`1px solid ${C.border}`,
+              borderRadius:8,overflow:"hidden",width:"fit-content"}}>
+              {[{k:"visual",l:"🗂 Visual Report"},{k:"text",l:"📄 Copy Report"}].map(t=>(
+                <button key={t.k} onClick={()=>setTab(t.k)}
+                  style={{padding:"8px 18px",border:"none",
+                    background:tab===t.k?C.accent:C.card,
+                    color:tab===t.k?"#fff":C.muted,
+                    fontSize:11,fontWeight:700,textTransform:"uppercase",
+                    letterSpacing:1,cursor:"pointer",transition:"all 0.15s"}}>{t.l}</button>
+              ))}
+            </div>
+
+            {tab==="visual"&&(
+              <div>
+                <div style={{fontSize:10,fontWeight:700,letterSpacing:2,textTransform:"uppercase",
+                  color:C.muted,marginBottom:12}}>
+                  {report.issues.length} unique issue{report.issues.length!==1?"s":""} found
+                </div>
+                {report.issues.length===0
+                  ?<div style={{textAlign:"center",padding:32,color:C.green,
+                      background:"#edf6f1",borderRadius:12,fontSize:14,fontWeight:600}}>
+                      ✅ No issues found! The document looks great.
+                    </div>
+                  :<div style={{display:"flex",flexDirection:"column",gap:10}}>
+                      {report.issues.map((iss,i)=><IssueCard key={i} issue={iss} idx={i+1}/>)}
+                    </div>
+                }
+              </div>
+            )}
+
+            {tab==="text"&&(
+              <div>
+                <p style={{fontSize:12,color:C.muted,marginBottom:10,fontStyle:"italic"}}>
+                  Click "Copy All" → paste into Word, email, or Notepad to save your report.
+                </p>
+                <CopyBox text={reportTxt}/>
+              </div>
+            )}
+
+            <div style={{marginTop:22,paddingTop:18,borderTop:`1px solid ${C.border}`}}>
+              <button onClick={reset}
+                style={{padding:"10px 22px",background:C.surface,border:`1px solid ${C.border}`,
+                  borderRadius:8,color:C.ink,fontSize:12,fontWeight:600,cursor:"pointer"}}>
+                🔄 Start New Check
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
