@@ -3,485 +3,669 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>ProofCheck AI — Document Proofreading</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<title>ProofCheck AGM — Smart Proofreading Tool</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <style>
+:root {
+  --bg: #f8f7f4;
+  --card: #ffffff;
+  --border: #e2ddd6;
+  --ink: #1c1917;
+  --muted: #78716c;
+  --light: #f5f3ef;
+  --error: #c0392b;
+  --error-bg: #fdf2f1;
+  --error-border: #f5c6c3;
+  --query: #b7590a;
+  --query-bg: #fef6ed;
+  --query-border: #fcd9b0;
+  --suggest: #1d6a9e;
+  --suggest-bg: #eef5fb;
+  --suggest-border: #b8d8f0;
+  --ok: #1a6640;
+  --ok-bg: #edf6f1;
+  --ok-border: #a8dabb;
+  --accent: #1c3f6e;
+}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#f5f0e8;color:#1a1612;font-family:Georgia,serif;min-height:100vh;padding-bottom:60px}
-textarea,input,button{font-family:inherit}
-::-webkit-scrollbar{width:6px}
-::-webkit-scrollbar-track{background:#ede8dc}
-::-webkit-scrollbar-thumb{background:#d4cdc0;border-radius:3px}
+body{background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',sans-serif;font-size:14px;line-height:1.6}
+button,input,textarea,select{font-family:inherit}
+
+/* ── Layout ── */
+.app{display:flex;flex-direction:column;min-height:100vh}
+.topbar{background:var(--accent);color:#fff;padding:0 32px;display:flex;align-items:center;justify-content:space-between;height:56px;flex-shrink:0}
+.topbar-logo{display:flex;align-items:center;gap:10px}
+.topbar-logo-icon{width:32px;height:32px;background:rgba(255,255,255,0.15);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:16px}
+.topbar-title{font-family:'Playfair Display',serif;font-size:18px;font-weight:600;letter-spacing:0.3px}
+.topbar-sub{font-size:11px;opacity:0.6;letter-spacing:1.5px;text-transform:uppercase;margin-top:1px}
+.topbar-badge{background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:20px;padding:4px 12px;font-size:11px;letter-spacing:0.5px}
+.main{flex:1;padding:32px;max-width:1200px;margin:0 auto;width:100%}
+
+/* ── Mode Selector ── */
+.mode-screen{display:flex;flex-direction:column;align-items:center;padding:48px 20px}
+.mode-title{font-family:'Playfair Display',serif;font-size:28px;font-weight:700;color:var(--accent);margin-bottom:8px;text-align:center}
+.mode-sub{color:var(--muted);font-size:14px;margin-bottom:48px;text-align:center}
+.mode-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;width:100%;max-width:860px}
+.mode-card{background:var(--card);border:2px solid var(--border);border-radius:16px;padding:32px 24px;cursor:pointer;transition:all 0.2s;text-align:center}
+.mode-card:hover{border-color:var(--accent);transform:translateY(-3px);box-shadow:0 8px 32px rgba(28,63,110,0.12)}
+.mode-card.active{border-color:var(--accent);background:#f0f4fa}
+.mode-icon{font-size:36px;margin-bottom:16px}
+.mode-name{font-family:'Playfair Display',serif;font-size:17px;font-weight:600;color:var(--accent);margin-bottom:8px}
+.mode-desc{font-size:12px;color:var(--muted);line-height:1.6}
+.mode-tag{display:inline-block;margin-top:12px;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase}
+.tag-new{background:#e8f0fe;color:#1a56c4}
+.tag-change{background:#fef3e8;color:#b7590a}
+.tag-single{background:#e8f5ec;color:#1a6640}
+.demo-btn{margin-top:40px;padding:14px 40px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;letter-spacing:0.3px;transition:all 0.2s}
+.demo-btn:hover{background:#16325a;box-shadow:0 4px 20px rgba(28,63,110,0.3)}
+
+/* ── Upload Area ── */
+.upload-screen{max-width:900px;margin:0 auto}
+.upload-header{margin-bottom:32px}
+.upload-header h2{font-family:'Playfair Display',serif;font-size:22px;color:var(--accent);margin-bottom:6px}
+.upload-header p{color:var(--muted);font-size:13px}
+.upload-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px}
+.upload-box{background:var(--card);border:2px dashed var(--border);border-radius:12px;padding:32px 20px;text-align:center;cursor:pointer;transition:all 0.2s}
+.upload-box:hover{border-color:var(--accent);background:#f7f9fd}
+.upload-box.filled{border-color:var(--ok);border-style:solid;background:var(--ok-bg)}
+.upload-box-icon{font-size:28px;margin-bottom:10px}
+.upload-box-label{font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.upload-box-hint{font-size:11px;color:var(--muted)}
+.upload-box-name{font-size:12px;color:var(--ok);font-weight:500;margin-top:6px}
+.run-btn{width:100%;padding:14px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;transition:all 0.2s;letter-spacing:0.3px}
+.run-btn:hover{background:#16325a}
+.run-btn:disabled{background:var(--border);color:var(--muted);cursor:not-allowed}
+
+/* ── Report Layout ── */
+.report-layout{display:grid;grid-template-columns:1fr 380px;gap:24px;align-items:start}
+.report-doc{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.report-doc-header{background:var(--accent);color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between}
+.report-doc-title{font-family:'Playfair Display',serif;font-size:16px;font-weight:600}
+.report-doc-meta{font-size:11px;opacity:0.7}
+.doc-section{border-bottom:1px solid var(--border);padding:20px 24px}
+.doc-section:last-child{border-bottom:none}
+.doc-section-label{font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.doc-section-label::after{content:'';flex:1;height:1px;background:var(--border)}
+.doc-text{font-size:13px;line-height:1.9;color:var(--ink)}
+
+/* ── Highlights ── */
+.hl{border-radius:3px;padding:1px 3px;cursor:pointer;transition:all 0.15s;position:relative;display:inline}
+.hl-error{background:#ffd5d2;border-bottom:2px solid var(--error);color:var(--error)}
+.hl-query{background:#fde8cc;border-bottom:2px solid var(--query);color:#7a3a05}
+.hl-suggest{background:#d0e8f7;border-bottom:2px solid var(--suggest);color:#0d4a7a}
+.hl:hover{filter:brightness(0.92)}
+.hl-tag{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;font-size:9px;font-weight:700;margin-left:2px;vertical-align:middle}
+.hl-tag-error{background:var(--error);color:#fff}
+.hl-tag-query{background:var(--query);color:#fff}
+.hl-tag-suggest{background:var(--suggest);color:#fff}
+
+/* ── Issues Panel ── */
+.issues-panel{display:flex;flex-direction:column;gap:0;position:sticky;top:24px}
+.panel-summary{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px}
+.panel-summary-title{font-family:'Playfair Display',serif;font-size:16px;color:var(--accent);margin-bottom:14px}
+.summary-row{display:flex;gap:10px;margin-bottom:10px}
+.summary-pill{flex:1;border-radius:8px;padding:10px;text-align:center}
+.summary-pill-num{font-size:22px;font-weight:700;line-height:1}
+.summary-pill-label{font-size:9px;text-transform:uppercase;letter-spacing:1px;margin-top:3px;opacity:0.8}
+.pill-error{background:var(--error-bg);color:var(--error);border:1px solid var(--error-border)}
+.pill-query{background:var(--query-bg);color:var(--query);border:1px solid var(--query-border)}
+.pill-suggest{background:var(--suggest-bg);color:var(--suggest);border:1px solid var(--suggest-border)}
+.job-info{background:var(--light);border-radius:8px;padding:12px;font-size:12px;color:var(--muted)}
+.job-info-row{display:flex;justify-content:space-between;margin-bottom:4px}
+.job-info-row:last-child{margin-bottom:0}
+.job-info-val{color:var(--ink);font-weight:500;font-family:'IBM Plex Mono',monospace;font-size:11px}
+
+.issues-tabs{display:flex;background:var(--card);border:1px solid var(--border);border-radius:12px 12px 0 0;overflow:hidden;border-bottom:none}
+.issues-tab{flex:1;padding:10px;text-align:center;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;cursor:pointer;transition:all 0.15s;border-bottom:2px solid transparent}
+.issues-tab.active-error{background:var(--error-bg);color:var(--error);border-bottom-color:var(--error)}
+.issues-tab.active-query{background:var(--query-bg);color:var(--query);border-bottom-color:var(--query)}
+.issues-tab.active-suggest{background:var(--suggest-bg);color:var(--suggest);border-bottom-color:var(--suggest)}
+.issues-tab:not(.active-error):not(.active-query):not(.active-suggest){color:var(--muted)}
+.issues-list{background:var(--card);border:1px solid var(--border);border-top:none;border-radius:0 0 12px 12px;max-height:480px;overflow-y:auto}
+.issue-item{padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.15s}
+.issue-item:last-child{border-bottom:none}
+.issue-item:hover{background:var(--light)}
+.issue-item.highlighted{background:var(--light)}
+.issue-num{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:10px;font-weight:700;margin-right:8px;flex-shrink:0}
+.issue-num-error{background:var(--error);color:#fff}
+.issue-num-query{background:var(--query);color:#fff}
+.issue-num-suggest{background:var(--suggest);color:#fff}
+.issue-header{display:flex;align-items:center;margin-bottom:6px}
+.issue-type-badge{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;padding:2px 7px;border-radius:4px;margin-right:6px}
+.badge-error{background:var(--error-bg);color:var(--error);border:1px solid var(--error-border)}
+.badge-query{background:var(--query-bg);color:var(--query);border:1px solid var(--query-border)}
+.badge-suggest{background:var(--suggest-bg);color:var(--suggest);border:1px solid var(--suggest-border)}
+.issue-section{font-size:10px;color:var(--muted);letter-spacing:0.5px}
+.issue-desc{font-size:12px;color:var(--ink);line-height:1.6;margin-bottom:6px}
+.issue-detail{font-size:11px;color:var(--muted);background:var(--light);border-radius:6px;padding:8px 10px;font-family:'IBM Plex Mono',monospace;line-height:1.7}
+.issue-detail .val-a{color:var(--error);font-weight:500}
+.issue-detail .val-b{color:var(--ok);font-weight:500}
+
+.note-area{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-top:16px}
+.note-label{font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+textarea.note-input{width:100%;min-height:70px;padding:10px;background:var(--light);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--ink);resize:vertical;outline:none;line-height:1.6}
+textarea.note-input:focus{border-color:var(--accent)}
+.note-input::placeholder{color:var(--muted);opacity:0.6}
+.note-submit{margin-top:8px;padding:7px 16px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer}
+
+.history-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-top:16px}
+.history-label{font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.history-item{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px}
+.history-item:last-child{border-bottom:none}
+.history-round{background:var(--accent);color:#fff;border-radius:4px;padding:2px 7px;font-size:10px;font-weight:600;flex-shrink:0;font-family:'IBM Plex Mono',monospace}
+.history-text{color:var(--ink);line-height:1.5}
+.history-time{font-size:10px;color:var(--muted);margin-top:2px}
+
+/* ── Mode badge ── */
+.mode-indicator{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 14px;margin-bottom:24px;width:fit-content}
+.mode-indicator-dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.mode-indicator-text{font-size:12px;font-weight:600;color:var(--accent)}
+.mode-indicator-change{font-size:11px;color:var(--muted);margin-left:4px}
+
+/* ── Back btn ── */
+.back-btn{background:none;border:1px solid var(--border);border-radius:8px;padding:7px 14px;font-size:12px;color:var(--muted);cursor:pointer;margin-bottom:24px;display:flex;align-items:center;gap:6px;transition:all 0.15s}
+.back-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ── Loading ── */
+.loading-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px;gap:16px}
+.loading-spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-size:14px;color:var(--muted)}
+.loading-sub{font-size:12px;color:var(--muted);opacity:0.6}
+
+/* ── Responsive ── */
+@media(max-width:900px){
+  .report-layout{grid-template-columns:1fr}
+  .mode-cards{grid-template-columns:1fr}
+  .issues-panel{position:static}
+}
 </style>
 </head>
 <body>
-<div id="root"></div>
-<script type="text/babel">
-const { useState, useRef, useCallback } = React;
+<div class="app" id="app">
 
-const C = {
-  bg:"#f5f0e8", surface:"#ede8dc", card:"#ffffff",
-  border:"#d4cdc0", ink:"#1a1612", muted:"#8a8278",
-  accent:"#c84b2f", green:"#2a7a4b", amber:"#c47f17", blue:"#2b5ea7", tag:"#f0ebe0"
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-logo">
+      <div class="topbar-logo-icon">📋</div>
+      <div>
+        <div class="topbar-title">ProofCheck AGM</div>
+        <div class="topbar-sub">Smart Proofreading Tool</div>
+      </div>
+    </div>
+    <div class="topbar-badge">PROTOTYPE v1.0</div>
+  </div>
+
+  <div class="main" id="main-content">
+    <!-- Content injected by JS -->
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────────
+let state = {
+  screen: 'mode', // mode | upload | loading | report
+  mode: null,
+  notes: [],
+  activeTab: 'error',
+  highlightedIssue: null,
 };
 
-const QUICK_RULES = [
-  {e:"✏️",l:"Spelling",    r:"Check all spelling errors"},
-  {e:"📖",l:"Grammar",     r:"Check grammar and punctuation"},
-  {e:"🎩",l:"Formal Tone", r:"Ensure formal professional tone"},
-  {e:"📐",l:"Formatting",  r:"Check formatting: headings, spacing, alignment"},
-  {e:"🔄",l:"Compare",     r:"Compare content vs reference and flag differences"},
-  {e:"💬",l:"Active Voice",r:"Flag passive voice, suggest active alternatives"},
-  {e:"🏷️",l:"Terminology", r:"Verify consistent terminology and proper nouns"},
+// ── Dummy Data ─────────────────────────────────────────────────────────────────
+const JOB = {
+  number: '78432',
+  company: 'Acme Corporation',
+  meeting: 'April 15, 2026',
+  time: '10:00 a.m. Eastern Time',
+  location: 'One Acme Plaza, New York, NY 10001',
+  round: 'First Draft',
+  files: ['AcmeCorp_Proxy_78432.pdf', 'AcmeCorp_Notice_78432.pdf'],
+};
+
+const ISSUES = [
+  {
+    id: 1, type: 'error', section: 'Header',
+    description: 'Job number mismatch between Proxy Card and Notice',
+    detail: 'Proxy Card: <span class="val-a">78432</span>\nNotice &amp; Access: <span class="val-a">78433</span>',
+    short: 'Job number mismatch',
+  },
+  {
+    id: 2, type: 'error', section: 'Meeting Details',
+    description: 'Meeting date differs between Proxy Card and Notice & Access',
+    detail: 'Proxy Card: <span class="val-a">April 15, 2026</span>\nNotice &amp; Access: <span class="val-a">April 16, 2026</span>',
+    short: 'Meeting date mismatch',
+  },
+  {
+    id: 3, type: 'error', section: 'Agenda',
+    description: 'Proposal 2 text does not match between documents',
+    detail: 'Proxy: <span class="val-a">"Ratification of Ernst & Young LLP"</span>\nNotice: <span class="val-a">"Ratification of Ernst and Young LLP"</span>',
+    short: 'Proposal 2 text mismatch',
+  },
+  {
+    id: 4, type: 'error', section: 'Directors',
+    description: 'Director name spelling inconsistency across documents',
+    detail: 'Proxy Card: <span class="val-a">"Jonathan P. Williams"</span>\nNotice: <span class="val-a">"Jonathon P. Williams"</span>',
+    short: 'Director name spelling',
+  },
+  {
+    id: 5, type: 'error', section: 'Meeting Materials',
+    description: 'Form 10-K listed in Proxy Card but missing from Notice & Access',
+    detail: 'Proxy: <span class="val-a">Notice, Proxy Statement and Form 10-K</span>\nNotice: <span class="val-a">Notice and Proxy Statement</span>',
+    short: 'Form 10-K missing in Notice',
+  },
+  {
+    id: 6, type: 'query', section: 'Agenda',
+    description: 'Vote recommendation capitalisation inconsistent — should "FOR" be all caps throughout?',
+    detail: 'Page 1: <span class="val-b">"FOR"</span> (all caps)\nPage 3: <span class="val-a">"For"</span> (title case)\nPlease confirm standard to apply',
+    short: 'FOR capitalisation',
+  },
+  {
+    id: 7, type: 'query', section: 'Directors',
+    description: 'Director term written as "1 Year" in Proxy but "One Year" in Notice — confirm preferred format',
+    detail: 'Proxy Card: <span class="val-b">"1 Year"</span>\nNotice: <span class="val-a">"One Year"</span>',
+    short: '1 Year vs One Year',
+  },
+  {
+    id: 8, type: 'query', section: 'Agenda',
+    description: 'Proposal 3 text runs to two lines in Proxy Card — should this be condensed to single line?',
+    detail: '"To approve the compensation of the Company\'s\nnamed executive officers" — consider single line alignment',
+    short: 'Proposal 3 line alignment',
+  },
+  {
+    id: 9, type: 'suggest', section: 'Meeting Details',
+    description: 'Meeting time format inconsistency — "a.m." used in one place, "AM" in another',
+    detail: 'Header: <span class="val-b">"10:00 a.m."</span>\nFooter: <span class="val-a">"10:00 AM"</span>\nRecommend standardising to "a.m." throughout',
+    short: 'Time format a.m. vs AM',
+  },
+  {
+    id: 10, type: 'suggest', section: 'Voting',
+    description: 'Proposal 1 uses FOR/WITHHOLD but Proposal 3 uses FOR/AGAINST — verify correct voting options per proposal type',
+    detail: 'Director elections: FOR / WITHHOLD ✓\nOther proposals: FOR / AGAINST / ABSTAIN\nProposal 3 missing ABSTAIN option',
+    short: 'Missing ABSTAIN option P3',
+  },
 ];
 
-const TYPE_STYLE = {
-  spelling:  {color:C.accent, bg:"#fdf0ed", label:"Spelling"},
-  grammar:   {color:C.amber,  bg:"#fdf5e6", label:"Grammar"},
-  formatting:{color:C.blue,   bg:"#eef2fa", label:"Formatting"},
-  style:     {color:C.green,  bg:"#edf6f1", label:"Style"},
-  match:     {color:C.green,  bg:"#edf6f1", label:"Difference"},
-};
+const HISTORY = [
+  { round: 'C2', text: 'Meeting location updated — verified correct in both documents', time: '2 days ago' },
+  { round: 'C1', text: 'Company name corrected from "ACME Corp" to "Acme Corporation"', time: '4 days ago' },
+  { round: 'Draft', text: 'First draft checked — 6 errors, 4 queries raised', time: '6 days ago' },
+];
 
-function toB64(file){
-  return new Promise((res,rej)=>{
-    const r=new FileReader();
-    r.onload=()=>res(r.result.split(",")[1]);
-    r.onerror=rej; r.readAsDataURL(file);
-  });
+// ── Render Functions ───────────────────────────────────────────────────────────
+function render() {
+  const el = document.getElementById('main-content');
+  if (state.screen === 'mode') el.innerHTML = renderMode();
+  else if (state.screen === 'upload') el.innerHTML = renderUpload();
+  else if (state.screen === 'loading') el.innerHTML = renderLoading();
+  else if (state.screen === 'report') el.innerHTML = renderReport();
+  bindEvents();
 }
 
-function readAsText(file){
-  return new Promise((res,rej)=>{
-    const r=new FileReader();
-    r.onload=()=>res(r.result);
-    r.onerror=rej; r.readAsText(file);
-  });
-}
-
-function deduplicateIssues(issues){
-  const seen=[];
-  return issues.filter(iss=>{
-    const key=(iss.description||"").toLowerCase().replace(/\s+/g," ").substring(0,60);
-    const isDup=seen.some(s=>{
-      if(s.type!==iss.type)return false;
-      const longer=Math.max(key.length,s.key.length);
-      if(longer===0)return true;
-      return [...key].filter((c,i)=>s.key[i]===c).length/longer>0.7;
-    });
-    if(!isDup)seen.push({type:iss.type,key});
-    return !isDup;
-  });
-}
-
-function copyText(text){
-  if(navigator.clipboard?.writeText)return navigator.clipboard.writeText(text);
-  const ta=document.createElement("textarea");
-  ta.value=text; ta.style.cssText="position:fixed;opacity:0";
-  document.body.appendChild(ta); ta.focus(); ta.select();
-  document.execCommand("copy"); document.body.removeChild(ta);
-  return Promise.resolve();
-}
-
-function DropZone({label,icon,file,onFile}){
-  const ref=useRef();
-  const [drag,setDrag]=useState(false);
-  const handle=useCallback(async(f)=>{
-    if(!f)return;
-    const b64=await toB64(f);
-    onFile({name:f.name,type:f.type,b64,raw:f});
-  },[onFile]);
-  return(
-    <div onClick={()=>ref.current.click()}
-      onDragOver={e=>{e.preventDefault();setDrag(true);}}
-      onDragLeave={()=>setDrag(false)}
-      onDrop={e=>{e.preventDefault();setDrag(false);handle(e.dataTransfer.files[0]);}}
-      style={{border:`2px dashed ${file?C.green:drag?C.accent:C.border}`,borderRadius:12,
-        background:file?"#f0f9f4":drag?"#fdf0ed":C.card,padding:"28px 16px",textAlign:"center",
-        cursor:"pointer",transition:"all 0.2s",minHeight:140,
-        display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8}}>
-      <input ref={ref} type="file" accept=".pdf,.jpg,.jpeg,.png,.txt"
-        style={{display:"none"}} onChange={e=>handle(e.target.files[0])}/>
-      <div style={{fontSize:32}}>{file?"✅":icon}</div>
-      <div style={{fontSize:10,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:C.muted}}>{label}</div>
-      {file
-        ?<div style={{fontSize:11,color:C.green,fontWeight:600,wordBreak:"break-all",maxWidth:"90%"}}>{file.name}</div>
-        :<div style={{fontSize:11,color:C.muted}}>PDF · JPG · PNG · TXT<br/>click or drag &amp; drop</div>
-      }
-    </div>
-  );
-}
-
-function IssueCard({issue,idx}){
-  const s=TYPE_STYLE[issue.type]||TYPE_STYLE.style;
-  return(
-    <div style={{background:s.bg,border:`1px solid ${s.color}33`,borderLeft:`3px solid ${s.color}`,
-      borderRadius:8,padding:"12px 14px",display:"flex",gap:12,alignItems:"flex-start"}}>
-      <div style={{minWidth:22,height:22,borderRadius:4,background:s.color,color:"#fff",
-        fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{idx}</div>
-      <div style={{flex:1}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5,flexWrap:"wrap"}}>
-          <span style={{fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:1.5,
-            color:s.color,background:s.color+"18",borderRadius:4,padding:"2px 7px"}}>{s.label}</span>
-          {issue.location&&<span style={{fontSize:10,color:C.muted}}>📍 {issue.location}</span>}
+function renderMode() {
+  return `
+    <div class="mode-screen">
+      <div class="mode-title">ProofCheck AGM</div>
+      <div class="mode-sub">Select the type of proofreading job to begin</div>
+      <div class="mode-cards">
+        <div class="mode-card" data-mode="firstdraft">
+          <div class="mode-icon">📄</div>
+          <div class="mode-name">First Draft Check</div>
+          <div class="mode-desc">Upload both Proxy Card and Notice & Access for a full cross-document check. Verifies all critical fields match exactly.</div>
+          <div class="mode-tag tag-new">New Job</div>
         </div>
-        <div style={{fontSize:13,color:C.ink,lineHeight:1.6,marginBottom:issue.suggestion?8:0}}>{issue.description}</div>
-        {issue.suggestion&&(
-          <div style={{fontSize:12,color:C.green,background:"#edf6f1",
-            borderRadius:6,padding:"6px 10px",borderLeft:`2px solid ${C.green}`}}>
-            💡 <strong>Fix:</strong> {issue.suggestion}
-          </div>
-        )}
+        <div class="mode-card" data-mode="change">
+          <div class="mode-icon">🔄</div>
+          <div class="mode-name">Change Round</div>
+          <div class="mode-desc">Upload updated document + markup (C1, C2, C3...). Verifies changes applied correctly and nothing else accidentally changed.</div>
+          <div class="mode-tag tag-change">Change Round</div>
+        </div>
+        <div class="mode-card" data-mode="single">
+          <div class="mode-icon">🔍</div>
+          <div class="mode-name">Single Document</div>
+          <div class="mode-desc">Check one document only for internal consistency. Verifies job number, names and proposals are consistent throughout.</div>
+          <div class="mode-tag tag-single">Single Doc</div>
+        </div>
       </div>
+      <button class="demo-btn" id="demo-btn">▶ Run Demo — First Draft Check</button>
     </div>
-  );
+  `;
 }
 
-function CopyBox({text}){
-  const [copied,setCopied]=useState(false);
-  const handle=async()=>{
-    await copyText(text); setCopied(true); setTimeout(()=>setCopied(false),2500);
-  };
-  return(
-    <div style={{position:"relative"}}>
-      <textarea readOnly value={text} style={{width:"100%",minHeight:220,padding:"12px 14px",
-        background:"#f8f5ef",border:`1px solid ${C.border}`,borderRadius:8,
-        fontFamily:"monospace",fontSize:11,color:C.ink,resize:"vertical",lineHeight:1.7,outline:"none"}}/>
-      <button onClick={handle} style={{position:"absolute",top:10,right:10,padding:"5px 12px",
-        borderRadius:6,background:copied?C.green:C.accent,color:"#fff",border:"none",
-        fontSize:11,fontWeight:700,cursor:"pointer",transition:"background 0.2s"}}>
-        {copied?"✅ Copied!":"📋 Copy All"}
-      </button>
+function renderUpload() {
+  const modeNames = { firstdraft: 'First Draft Check', change: 'Change Round', single: 'Single Document' };
+  return `
+    <button class="back-btn" id="back-btn">← Back</button>
+    <div class="upload-screen">
+      <div class="upload-header">
+        <h2>${modeNames[state.mode]}</h2>
+        <p>Upload your documents below. Supported formats: PDF · JPG · Word</p>
+      </div>
+      <div class="upload-grid">
+        <div class="upload-box">
+          <div class="upload-box-icon">📄</div>
+          <div class="upload-box-label">${state.mode === 'change' ? 'Updated Document' : 'Proxy Card'}</div>
+          <div class="upload-box-hint">PDF · JPG · Word · click to upload</div>
+        </div>
+        <div class="upload-box ${state.mode === 'single' ? '' : ''}">
+          <div class="upload-box-icon">📋</div>
+          <div class="upload-box-label">${state.mode === 'change' ? 'Markup (C1/C2/C3)' : state.mode === 'single' ? 'Not required' : 'Notice & Access'}</div>
+          <div class="upload-box-hint">${state.mode === 'single' ? 'Single document mode — one upload only' : 'PDF · JPG · Word · click to upload'}</div>
+        </div>
+      </div>
+      ${state.mode === 'change' ? `
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:20px">
+        <div style="font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Change Instructions (from client email)</div>
+        <textarea style="width:100%;min-height:60px;padding:10px;background:var(--light);border:1px solid var(--border);border-radius:8px;font-size:12px;resize:vertical;outline:none" placeholder="e.g. Change director name from John Smith to Jonathan Smith. Update meeting date to April 20, 2026..."></textarea>
+      </div>` : ''}
+      <button class="run-btn" id="run-btn">⚡ Run AI Proofreading</button>
     </div>
-  );
+  `;
 }
 
-function App(){
-  const [f1,setF1]=useState(null);
-  const [f2,setF2]=useState(null);
-  const [apiKey,setApiKey]=useState("");
-  const [showKey,setShowKey]=useState(false);
-  const [rules,setRules]=useState("");
-  const [active,setActive]=useState([]);
-  const [loading,setLoading]=useState(false);
-  const [statusMsg,setStatus]=useState("");
-  const [error,setError]=useState("");
-  const [report,setReport]=useState(null);
-  const [reportTxt,setReportTxt]=useState("");
-  const [tab,setTab]=useState("visual");
+function renderLoading() {
+  return `
+    <div class="loading-screen">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Analysing documents...</div>
+      <div class="loading-sub">Extracting fields · Comparing content · Classifying issues</div>
+    </div>
+  `;
+}
 
-  const toggleRule=(rule)=>{
-    const isOn=active.includes(rule);
-    const next=isOn?active.filter(r=>r!==rule):[...active,rule];
-    setActive(next);
-    const manual=rules.split("\n").filter(l=>!QUICK_RULES.some(q=>l.includes(q.r))).join("\n").trim();
-    const tags=next.map(r=>"• "+r).join("\n");
-    setRules([manual,tags].filter(Boolean).join("\n"));
-  };
+function renderReport() {
+  const errors = ISSUES.filter(i => i.type === 'error');
+  const queries = ISSUES.filter(i => i.type === 'query');
+  const suggests = ISSUES.filter(i => i.type === 'suggest');
+  const tabIssues = state.activeTab === 'error' ? errors : state.activeTab === 'query' ? queries : suggests;
 
-  const buildTxt=(r)=>{
-    let t=`PROOFCHECK AI — PROOFREADING REPORT\n${"=".repeat(44)}\n`;
-    t+=`Date      : ${new Date().toLocaleString()}\n`;
-    t+=`Reference : ${f1?.name}\nNew Doc   : ${f2?.name}\n${"─".repeat(44)}\n`;
-    t+=`Match Score  : ${r.match_score}%\nTotal Issues : ${r.issues.length}\n`;
-    t+=`  Spelling   : ${r.summary?.spelling??0}\n  Grammar    : ${r.summary?.grammar??0}\n`;
-    t+=`  Formatting : ${r.summary?.formatting??0}\n  Style      : ${r.summary?.style??0}\n`;
-    t+=`${"─".repeat(44)}\nSUMMARY:\n${r.overall_comment||"N/A"}\n${"─".repeat(44)}\nISSUES:\n\n`;
-    t+=r.issues.map((iss,i)=>
-      `${i+1}. [${(iss.type||"").toUpperCase()}]\n   Issue    : ${iss.description}\n   Location : ${iss.location||"N/A"}\n   Fix      : ${iss.suggestion||"N/A"}`
-    ).join("\n\n");
-    return t;
-  };
+  return `
+    <button class="back-btn" id="back-btn">← New Check</button>
 
-  const runCheck=async()=>{
-    if(!f1||!f2){setError("Please upload both documents first.");return;}
-    if(!apiKey.trim()){setError("Please enter your Groq API key.");return;}
-    setError("");setReport(null);setReportTxt("");setLoading(true);
+    <div class="mode-indicator">
+      <div class="mode-indicator-dot"></div>
+      <div class="mode-indicator-text">First Draft Check</div>
+      <div class="mode-indicator-change">· Job #${JOB.number} · ${JOB.company} · ${JOB.meeting}</div>
+    </div>
 
-    try{
-      setStatus("📂 Reading documents...");
+    <div class="report-layout">
 
-      // Extract text from files
-      const extractText=async(f)=>{
-        if(f.type.startsWith("image/")||f.type==="application/pdf"){
-          return `[${f.type.startsWith("image/")?"Image":"PDF"} file: ${f.name} — describe content based on filename]`;
-        }
-        try{ return await readAsText(f.raw); }
-        catch{ return `[File: ${f.name}]`; }
-      };
-
-      const text1=await extractText(f1);
-      const text2=await extractText(f2);
-
-      const ruleText=rules.trim()||"Check spelling, grammar, formatting, and compare both documents.";
-
-      const prompt=
-        `You are a senior professional proofreader.\n\n`+
-        `Document A = REFERENCE (${f1.name}):\n${text1.substring(0,4000)}\n\n`+
-        `Document B = NEW document to proofread (${f2.name}):\n${text2.substring(0,4000)}\n\n`+
-        `Rules:\n${ruleText}\n\n`+
-        `STRICT DEDUPLICATION:\n`+
-        `1. Every unique issue appears ONCE only\n`+
-        `2. Never report same problem under two types\n`+
-        `3. Assign to most specific: spelling > grammar > formatting > style > match\n`+
-        `4. Merge issues that are the same underlying problem\n\n`+
-        `Return ONLY valid JSON, no markdown, no explanation:\n`+
-        `{"match_score":<0-100>,"overall_comment":"<2-3 sentences>","summary":{"total_issues":<n>,"spelling":<n>,"grammar":<n>,"formatting":<n>,"style":<n>},"issues":[{"type":"spelling|grammar|formatting|style|match","description":"<issue>","location":"<where>","suggestion":"<fix>"}]}`;
-
-      setStatus("🤖 AI is comparing and proofreading...");
-
-      const res=await fetch("https://api.groq.com/openai/v1/chat/completions",{
-        method:"POST",
-        headers:{
-          "Content-Type":"application/json",
-          "Authorization":`Bearer ${apiKey.trim()}`
-        },
-        body:JSON.stringify({
-          model:"llama-3.3-70b-versatile",
-          messages:[{role:"user",content:prompt}],
-          temperature:0.1,
-          max_tokens:2000
-        })
-      });
-
-      if(!res.ok){
-        const e=await res.json();
-        throw new Error(e?.error?.message||"Groq API error: "+res.status);
-      }
-
-      const data=await res.json();
-      const raw=data.choices?.[0]?.message?.content||"";
-      if(!raw)throw new Error("Empty response. Please try again.");
-
-      const clean=raw.replace(/```json|```/g,"").trim();
-      const result=JSON.parse(clean);
-      result.issues=deduplicateIssues(result.issues||[]);
-      result.summary.total_issues=result.issues.length;
-      setReport(result);
-      setReportTxt(buildTxt(result));
-      setStatus("");
-    }catch(e){
-      setError("❌ "+e.message);
-    }finally{
-      setLoading(false);
-    }
-  };
-
-  const reset=()=>{
-    setF1(null);setF2(null);setRules("");setActive([]);
-    setError("");setReport(null);setReportTxt("");setStatus("");setTab("visual");
-  };
-
-  const mc=report?(report.match_score>=80?C.green:report.match_score>=50?C.amber:C.accent):C.green;
-
-  return(
-    <div style={{background:C.bg,minHeight:"100vh",fontFamily:"Georgia,serif",color:C.ink}}>
-      <div style={{maxWidth:820,margin:"0 auto",padding:"0 20px 60px"}}>
-
-        {/* Header */}
-        <div style={{padding:"36px 0 24px",borderBottom:`2px solid ${C.ink}`,marginBottom:32}}>
-          <div style={{display:"flex",alignItems:"flex-end",gap:12,marginBottom:6}}>
-            <span style={{fontSize:34}}>🔍</span>
+      <!-- LEFT: Document View -->
+      <div>
+        <div class="report-doc">
+          <div class="report-doc-header">
             <div>
-              <div style={{fontSize:26,fontWeight:700,letterSpacing:-0.5,lineHeight:1,fontFamily:"Syne,sans-serif"}}>
-                ProofCheck <span style={{color:C.accent}}>AI</span>
-              </div>
-              <div style={{fontSize:10,color:C.muted,fontFamily:"DM Mono,monospace",letterSpacing:2,marginTop:3}}>
-                AUTOMATED DOCUMENT PROOFREADING · POWERED BY GROQ (FREE)
-              </div>
+              <div class="report-doc-title">Proxy Card + Notice & Access</div>
+              <div class="report-doc-meta">${JOB.files[0]} · ${JOB.files[1]}</div>
+            </div>
+            <div style="font-size:11px;opacity:0.7">Highlights show issues inline</div>
+          </div>
+
+          <!-- HEADER SECTION -->
+          <div class="doc-section">
+            <div class="doc-section-label">Header / Identification</div>
+            <div class="doc-text">
+              <strong>${JOB.company}</strong><br/>
+              Job Number: <span class="hl hl-error" data-issue="1">#78432 (Proxy) / #78433 (Notice)<span class="hl-tag hl-tag-error">1</span></span><br/>
+              Annual Meeting of Shareholders
             </div>
           </div>
-          <p style={{fontSize:13,color:C.muted,fontStyle:"italic",marginTop:8}}>
-            Upload two documents → AI compares, checks &amp; generates a clean deduplicated report
-          </p>
-        </div>
 
-        {/* API Key */}
-        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:20,marginBottom:22}}>
-          <div style={{fontSize:10,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:C.muted,marginBottom:6}}>
-            🔑 Groq API Key{" "}<span style={{color:C.green,fontWeight:600,fontSize:11}}>✅ 100% Free · No credit card</span>
-          </div>
-          <div style={{display:"flex",gap:10,marginBottom:8}}>
-            <input type={showKey?"text":"password"} value={apiKey} onChange={e=>setApiKey(e.target.value)}
-              placeholder="gsk_..."
-              style={{flex:1,padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:8,
-                background:C.surface,color:C.ink,fontSize:12,outline:"none"}}/>
-            <button onClick={()=>setShowKey(!showKey)}
-              style={{padding:"9px 14px",border:`1px solid ${C.border}`,borderRadius:8,
-                background:C.surface,color:C.muted,fontSize:12,cursor:"pointer"}}>
-              {showKey?"🙈 Hide":"👁 Show"}
-            </button>
-          </div>
-          <div style={{fontSize:11,color:C.muted,lineHeight:1.8}}>
-            Get free key at{" "}
-            <a href="https://console.groq.com" target="_blank" style={{color:C.accent,fontWeight:600}}>console.groq.com</a>
-            {" "}→ Sign up with Gmail → <strong>API Keys</strong> → <strong>Create API Key</strong> → Copy key starting with <strong>gsk_</strong>
-          </div>
-        </div>
-
-        {/* Upload */}
-        <div style={{marginBottom:22}}>
-          <div style={{fontSize:10,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:C.muted,marginBottom:10}}>
-            Step 1 — Upload Documents
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-            <DropZone label="Reference Document" icon="📄" file={f1} onFile={setF1}/>
-            <DropZone label="New Document" icon="📝" file={f2} onFile={setF2}/>
-          </div>
-          <div style={{fontSize:11,color:C.muted,marginTop:8,fontStyle:"italic"}}>
-            ⚠️ Note: For best results upload <strong>TXT files</strong>. PDF/JPG text will be analysed by filename only with Groq.
-          </div>
-        </div>
-
-        {/* Rules */}
-        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:20,marginBottom:18}}>
-          <div style={{fontSize:10,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:C.muted,marginBottom:12}}>
-            Step 2 — Set Rules (optional)
-          </div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:12}}>
-            {QUICK_RULES.map(q=>{
-              const on=active.includes(q.r);
-              return(
-                <button key={q.r} onClick={()=>toggleRule(q.r)}
-                  style={{padding:"5px 12px",borderRadius:20,
-                    border:`1px solid ${on?C.accent:C.border}`,
-                    background:on?C.accent:C.tag,color:on?"#fff":C.ink,
-                    fontSize:11,cursor:"pointer",fontWeight:on?600:400,transition:"all 0.15s"}}>
-                  {q.e} {q.l}
-                </button>
-              );
-            })}
-          </div>
-          <textarea value={rules} onChange={e=>setRules(e.target.value)}
-            placeholder="Or type custom rules... e.g. Company name must be 'Acme Corp', 12pt font, British spelling..."
-            style={{width:"100%",minHeight:60,padding:"10px 12px",border:`1px solid ${C.border}`,
-              borderRadius:8,background:C.surface,color:C.ink,fontSize:12,resize:"vertical",
-              outline:"none",lineHeight:1.7}}/>
-        </div>
-
-        {/* Run */}
-        <button onClick={runCheck} disabled={loading||!f1||!f2||!apiKey}
-          style={{width:"100%",padding:"14px",marginBottom:16,
-            background:loading||!f1||!f2||!apiKey?C.border:C.accent,
-            color:loading||!f1||!f2||!apiKey?C.muted:"#fff",
-            border:"none",borderRadius:10,fontSize:15,fontWeight:700,
-            cursor:loading||!f1||!f2||!apiKey?"not-allowed":"pointer",transition:"all 0.2s"}}>
-          {loading?"⏳ Analyzing documents...":"⚡ Run AI Proofreading"}
-        </button>
-
-        {loading&&(
-          <div style={{marginBottom:20}}>
-            <div style={{height:3,background:C.border,borderRadius:3,overflow:"hidden",marginBottom:10}}>
-              <div style={{height:"100%",background:C.accent,borderRadius:3,
-                animation:"prog 1.8s ease-in-out infinite"}}/>
-            </div>
-            <div style={{textAlign:"center",fontSize:12,color:C.muted,fontStyle:"italic"}}>{statusMsg}</div>
-          </div>
-        )}
-        <style>{`@keyframes prog{0%{width:5%;margin-left:0}50%{width:55%;margin-left:20%}100%{width:5%;margin-left:95%}}`}</style>
-
-        {error&&(
-          <div style={{background:"#fdf0ed",border:`1px solid ${C.accent}44`,
-            borderLeft:`3px solid ${C.accent}`,borderRadius:8,
-            padding:"12px 16px",fontSize:13,color:C.accent,marginBottom:20}}>{error}</div>
-        )}
-
-        {/* Report */}
-        {report&&(
-          <div>
-            <div style={{borderTop:`2px solid ${C.ink}`,paddingTop:22,marginBottom:20}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:12}}>
-                <div>
-                  <div style={{fontSize:20,fontWeight:700,fontFamily:"Syne,sans-serif"}}>📋 Proofreading Report</div>
-                  <div style={{fontSize:11,color:C.muted,marginTop:3}}>{new Date().toLocaleString()}</div>
-                </div>
-                <div style={{textAlign:"center",background:C.card,border:`2px solid ${mc}`,borderRadius:10,padding:"10px 18px"}}>
-                  <div style={{fontSize:26,fontWeight:800,color:mc}}>{report.match_score}%</div>
-                  <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1}}>Match Score</div>
-                </div>
-              </div>
-            </div>
-
-            <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:18}}>
-              {[
-                {l:"Total",v:report.issues.length,c:C.accent},
-                {l:"Spelling",v:report.summary?.spelling,c:C.accent},
-                {l:"Grammar",v:report.summary?.grammar,c:C.amber},
-                {l:"Formatting",v:report.summary?.formatting,c:C.blue},
-                {l:"Style",v:report.summary?.style,c:C.green},
-              ].map(s=>(
-                <div key={s.l} style={{background:C.card,border:`1px solid ${C.border}`,
-                  borderRadius:8,padding:"10px 14px",textAlign:"center",minWidth:70}}>
-                  <div style={{fontSize:22,fontWeight:800,color:s.c}}>{s.v??0}</div>
-                  <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1}}>{s.l}</div>
-                </div>
-              ))}
-            </div>
-
-            {report.overall_comment&&(
-              <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,
-                padding:"13px 16px",marginBottom:18,fontSize:13,color:C.ink,lineHeight:1.7,fontStyle:"italic"}}>
-                💬 {report.overall_comment}
-              </div>
-            )}
-
-            <div style={{display:"flex",gap:0,marginBottom:16,border:`1px solid ${C.border}`,
-              borderRadius:8,overflow:"hidden",width:"fit-content"}}>
-              {[{k:"visual",l:"🗂 Visual Report"},{k:"text",l:"📄 Copy Report"}].map(t=>(
-                <button key={t.k} onClick={()=>setTab(t.k)}
-                  style={{padding:"8px 18px",border:"none",
-                    background:tab===t.k?C.accent:C.card,
-                    color:tab===t.k?"#fff":C.muted,
-                    fontSize:11,fontWeight:700,textTransform:"uppercase",
-                    letterSpacing:1,cursor:"pointer",transition:"all 0.15s"}}>{t.l}</button>
-              ))}
-            </div>
-
-            {tab==="visual"&&(
-              <div>
-                <div style={{fontSize:10,fontWeight:700,letterSpacing:2,textTransform:"uppercase",
-                  color:C.muted,marginBottom:12}}>
-                  {report.issues.length} unique issue{report.issues.length!==1?"s":""} found
-                </div>
-                {report.issues.length===0
-                  ?<div style={{textAlign:"center",padding:32,color:C.green,
-                      background:"#edf6f1",borderRadius:12,fontSize:14,fontWeight:600}}>
-                      ✅ No issues found! The document looks great.
-                    </div>
-                  :<div style={{display:"flex",flexDirection:"column",gap:10}}>
-                      {report.issues.map((iss,i)=><IssueCard key={i} issue={iss} idx={i+1}/>)}
-                    </div>
-                }
-              </div>
-            )}
-
-            {tab==="text"&&(
-              <div>
-                <p style={{fontSize:12,color:C.muted,marginBottom:10,fontStyle:"italic"}}>
-                  Click "Copy All" → paste into Word, email, or Notepad to save your report.
-                </p>
-                <CopyBox text={reportTxt}/>
-              </div>
-            )}
-
-            <div style={{marginTop:22,paddingTop:18,borderTop:`1px solid ${C.border}`}}>
-              <button onClick={reset}
-                style={{padding:"10px 22px",background:C.surface,border:`1px solid ${C.border}`,
-                  borderRadius:8,color:C.ink,fontSize:12,fontWeight:600,cursor:"pointer"}}>
-                🔄 Start New Check
-              </button>
+          <!-- MEETING DETAILS -->
+          <div class="doc-section">
+            <div class="doc-section-label">Meeting Details</div>
+            <div class="doc-text">
+              Date: <span class="hl hl-error" data-issue="2">April 15, 2026 (Proxy) / April 16, 2026 (Notice)<span class="hl-tag hl-tag-error">2</span></span><br/>
+              Time: <span class="hl hl-suggest" data-issue="9">10:00 <span style="text-decoration:underline dotted">a.m.</span> / 10:00 AM<span class="hl-tag hl-tag-suggest">9</span></span> Eastern Time<br/>
+              Location: ${JOB.location}
             </div>
           </div>
-        )}
+
+          <!-- AGENDA -->
+          <div class="doc-section">
+            <div class="doc-section-label">Agenda / Proposals</div>
+            <div class="doc-text">
+              The following items will be voted on at the Annual Meeting:<br/><br/>
+
+              <strong>Proposal 1.</strong> Election of Directors — Board recommends vote
+              <span class="hl hl-query" data-issue="6">&nbsp;FOR&nbsp;<span class="hl-tag hl-tag-query">6</span></span>
+              each nominee<br/><br/>
+
+              <strong>Proposal 2.</strong> Ratification of
+              <span class="hl hl-error" data-issue="3">Ernst &amp; Young LLP (Proxy) / Ernst and Young LLP (Notice)<span class="hl-tag hl-tag-error">3</span></span>
+              as independent auditor — Board recommends vote FOR<br/><br/>
+
+              <strong>Proposal 3.</strong>
+              <span class="hl hl-query" data-issue="8">To approve the compensation of the Company's named executive officers<span class="hl-tag hl-tag-query">8</span></span>
+              — Board recommends vote
+              <span class="hl hl-suggest" data-issue="10">FOR / AGAINST<span class="hl-tag hl-tag-suggest">10</span></span>
+              <br/><br/>
+
+              <strong>Proposal 4.</strong> Advisory vote on frequency of say-on-pay — Board recommends <span class="hl hl-query" data-issue="6">For<span class="hl-tag hl-tag-query">6</span></span> every year
+            </div>
+          </div>
+
+          <!-- DIRECTORS -->
+          <div class="doc-section">
+            <div class="doc-section-label">Director Nominees</div>
+            <div class="doc-text">
+              The Board proposes election of the following nominees, each for a term of
+              <span class="hl hl-query" data-issue="7">1 Year (Proxy) / One Year (Notice)<span class="hl-tag hl-tag-query">7</span></span>:<br/><br/>
+
+              • <span class="hl hl-error" data-issue="4">Jonathan P. Williams (Proxy) / Jonathon P. Williams (Notice)<span class="hl-tag hl-tag-error">4</span></span> — Chairman<br/>
+              • Sarah L. Chen — Lead Independent Director<br/>
+              • Michael R. Thompson — Audit Committee Chair<br/>
+              • Patricia K. Davis — Compensation Committee Chair
+            </div>
+          </div>
+
+          <!-- VOTING -->
+          <div class="doc-section">
+            <div class="doc-section-label">Voting Options</div>
+            <div class="doc-text">
+              Proposal 1 (Director Election): FOR / WITHHOLD ✓<br/>
+              Proposal 2 (Auditor): FOR / AGAINST / ABSTAIN ✓<br/>
+              Proposal 3 (Say-on-Pay):
+              <span class="hl hl-suggest" data-issue="10">FOR / AGAINST<span class="hl-tag hl-tag-suggest">10</span></span>
+              — ABSTAIN option missing<br/>
+              Proposal 4 (Frequency): 1 YEAR / 2 YEARS / 3 YEARS / ABSTAIN ✓
+            </div>
+          </div>
+
+          <!-- MATERIALS -->
+          <div class="doc-section">
+            <div class="doc-section-label">Meeting Materials</div>
+            <div class="doc-text">
+              Proxy Card: Notice of Annual Meeting, Proxy Statement and
+              <span class="hl hl-error" data-issue="5">Form 10-K<span class="hl-tag hl-tag-error">5</span></span><br/>
+              Notice &amp; Access: Notice of Annual Meeting and Proxy Statement<br/>
+              <span style="font-size:11px;color:var(--error)">⚠ Form 10-K present in Proxy Card but missing from Notice &amp; Access</span>
+            </div>
+          </div>
+
+        </div><!-- end report-doc -->
       </div>
-    </div>
-  );
+
+      <!-- RIGHT: Issues Panel -->
+      <div class="issues-panel">
+
+        <!-- Summary -->
+        <div class="panel-summary">
+          <div class="panel-summary-title">Report Summary</div>
+          <div class="summary-row">
+            <div class="summary-pill pill-error">
+              <div class="summary-pill-num">${errors.length}</div>
+              <div class="summary-pill-label">Errors</div>
+            </div>
+            <div class="summary-pill pill-query">
+              <div class="summary-pill-num">${queries.length}</div>
+              <div class="summary-pill-label">Queries</div>
+            </div>
+            <div class="summary-pill pill-suggest">
+              <div class="summary-pill-num">${suggests.length}</div>
+              <div class="summary-pill-label">Suggestions</div>
+            </div>
+          </div>
+          <div class="job-info">
+            <div class="job-info-row"><span>Job No.</span><span class="job-info-val">#${JOB.number}</span></div>
+            <div class="job-info-row"><span>Company</span><span class="job-info-val">${JOB.company}</span></div>
+            <div class="job-info-row"><span>Meeting</span><span class="job-info-val">${JOB.meeting}</span></div>
+            <div class="job-info-row"><span>Round</span><span class="job-info-val">${JOB.round}</span></div>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="issues-tabs">
+          <div class="issues-tab ${state.activeTab==='error'?'active-error':''}" data-tab="error">🔴 Errors (${errors.length})</div>
+          <div class="issues-tab ${state.activeTab==='query'?'active-query':''}" data-tab="query">🟡 Queries (${queries.length})</div>
+          <div class="issues-tab ${state.activeTab==='suggest'?'active-suggest':''}" data-tab="suggest">🔵 Tips (${suggests.length})</div>
+        </div>
+
+        <!-- Issue List -->
+        <div class="issues-list">
+          ${tabIssues.map(iss => `
+            <div class="issue-item ${state.highlightedIssue===iss.id?'highlighted':''}" data-highlight="${iss.id}">
+              <div class="issue-header">
+                <span class="issue-num issue-num-${iss.type}">${iss.id}</span>
+                <span class="issue-type-badge badge-${iss.type}">${iss.type === 'error' ? 'Error' : iss.type === 'query' ? 'Query' : 'Suggestion'}</span>
+                <span class="issue-section">📍 ${iss.section}</span>
+              </div>
+              <div class="issue-desc">${iss.description}</div>
+              <div class="issue-detail">${iss.detail}</div>
+            </div>
+          `).join('')}
+        </div>
+
+        <!-- Proofreader Notes -->
+        <div class="note-area">
+          <div class="note-label">✍ Proofreader Notes</div>
+          <textarea class="note-input" id="note-input" placeholder="Add a manual query or note... e.g. 'Check if boilerplate on page 2 matches approved template'"></textarea>
+          <button class="note-submit" id="note-submit">Add Note</button>
+          ${state.notes.length > 0 ? state.notes.map((n,i) => `
+            <div style="margin-top:8px;background:var(--light);border-radius:6px;padding:8px 10px;font-size:12px;color:var(--ink);border-left:3px solid var(--query)">
+              <span style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Note ${i+1}</span>
+              ${n}
+            </div>
+          `).join('') : ''}
+        </div>
+
+        <!-- Change History -->
+        <div class="history-box">
+          <div class="history-label">📂 Change History — Job #${JOB.number}</div>
+          ${HISTORY.map(h => `
+            <div class="history-item">
+              <span class="history-round">${h.round}</span>
+              <div>
+                <div class="history-text">${h.text}</div>
+                <div class="history-time">${h.time}</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+
+      </div><!-- end issues-panel -->
+    </div><!-- end report-layout -->
+  `;
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+// ── Event Binding ──────────────────────────────────────────────────────────────
+function bindEvents() {
+
+  // Mode cards
+  document.querySelectorAll('.mode-card').forEach(card => {
+    card.addEventListener('click', () => {
+      state.mode = card.dataset.mode;
+      state.screen = 'upload';
+      render();
+    });
+  });
+
+  // Demo button
+  const demoBtn = document.getElementById('demo-btn');
+  if (demoBtn) {
+    demoBtn.addEventListener('click', () => {
+      state.mode = 'firstdraft';
+      state.screen = 'loading';
+      render();
+      setTimeout(() => {
+        state.screen = 'report';
+        render();
+      }, 2200);
+    });
+  }
+
+  // Back button
+  const backBtn = document.getElementById('back-btn');
+  if (backBtn) {
+    backBtn.addEventListener('click', () => {
+      state.screen = state.screen === 'upload' ? 'mode' : 'mode';
+      state.mode = null;
+      render();
+    });
+  }
+
+  // Run button (upload screen)
+  const runBtn = document.getElementById('run-btn');
+  if (runBtn) {
+    runBtn.addEventListener('click', () => {
+      state.screen = 'loading';
+      render();
+      setTimeout(() => {
+        state.screen = 'report';
+        render();
+      }, 2200);
+    });
+  }
+
+  // Issue tabs
+  document.querySelectorAll('.issues-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      state.activeTab = tab.dataset.tab;
+      render();
+    });
+  });
+
+  // Highlight issue on click
+  document.querySelectorAll('.issue-item[data-highlight]').forEach(item => {
+    item.addEventListener('click', () => {
+      state.highlightedIssue = parseInt(item.dataset.highlight);
+      render();
+      // Scroll to highlight in doc
+      const hl = document.querySelector(`.hl[data-issue="${state.highlightedIssue}"]`);
+      if (hl) hl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
+
+  // Click highlight in doc → show issue
+  document.querySelectorAll('.hl[data-issue]').forEach(hl => {
+    hl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = parseInt(hl.dataset.issue);
+      const issue = ISSUES.find(i => i.id === id);
+      if (issue) {
+        state.activeTab = issue.type === 'suggest' ? 'suggest' : issue.type;
+        state.highlightedIssue = id;
+        render();
+        const issueEl = document.querySelector(`.issue-item[data-highlight="${id}"]`);
+        if (issueEl) issueEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
+  });
+
+  // Add note
+  const noteSubmit = document.getElementById('note-submit');
+  if (noteSubmit) {
+    noteSubmit.addEventListener('click', () => {
+      const input = document.getElementById('note-input');
+      if (input && input.value.trim()) {
+        state.notes.push(input.value.trim());
+        render();
+      }
+    });
+  }
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+render();
 </script>
 </body>
 </html>
