@@ -19,7 +19,6 @@ textarea,input,button{font-family:inherit}
 </head>
 <body>
 <div id="root"></div>
-
 <script type="text/babel">
 const { useState, useRef, useCallback } = React;
 
@@ -85,7 +84,7 @@ function DropZone({label,icon,file,onFile}){
   const handle=useCallback(async(f)=>{
     if(!f)return;
     const b64=await toB64(f);
-    onFile({name:f.name,type:f.type,b64});
+    onFile({name:f.name,type:f.type,b64,raw:f});
   },[onFile]);
   return(
     <div onClick={()=>ref.current.click()}
@@ -152,6 +151,15 @@ function CopyBox({text}){
   );
 }
 
+// ── Read file as text ─────────────────────────────────────────────────────────
+function readAsText(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=()=>res(r.result);
+    r.onerror=rej; r.readAsText(file);
+  });
+}
+
 function App(){
   const [f1,setF1]=useState(null);
   const [f2,setF2]=useState(null);
@@ -175,38 +183,6 @@ function App(){
     setRules([manual,tags].filter(Boolean).join("\n"));
   };
 
-  const buildContent=()=>{
-    const ruleText=rules.trim()||"Check spelling, grammar, formatting, and compare both documents.";
-    const blocks=[];
-    blocks.push({type:"text",text:
-      `You are a senior professional proofreader.\n\n`+
-      `Document A = REFERENCE (${f1.name}) — correct/approved version\n`+
-      `Document B = NEW document (${f2.name}) — needs proofreading\n\n`+
-      `Rules:\n${ruleText}\n\n`+
-      `STRICT DEDUPLICATION:\n`+
-      `1. Every unique issue appears ONCE only\n`+
-      `2. Never report same problem under two types\n`+
-      `3. Assign to most specific: spelling > grammar > formatting > style > match\n`+
-      `4. Merge issues that are the same underlying problem\n\n`+
-      `Return ONLY valid JSON, no markdown:\n`+
-      `{"match_score":<0-100>,"overall_comment":"<2-3 sentences>","summary":{"total_issues":<n>,"spelling":<n>,"grammar":<n>,"formatting":<n>,"style":<n>},"issues":[{"type":"spelling|grammar|formatting|style|match","description":"<issue>","location":"<where>","suggestion":"<fix>"}]}`
-    });
-    const addDoc=(f,label)=>{
-      blocks.push({type:"text",text:`\n${label}:`});
-      if(f.type.startsWith("image/")){
-        blocks.push({type:"image",source:{type:"base64",media_type:f.type,data:f.b64}});
-      } else if(f.type==="application/pdf"){
-        blocks.push({type:"document",source:{type:"base64",media_type:"application/pdf",data:f.b64}});
-      } else {
-        try{blocks.push({type:"text",text:decodeURIComponent(escape(atob(f.b64))).substring(0,8000)});}
-        catch{blocks.push({type:"text",text:`[File: ${f.name}]`});}
-      }
-    };
-    addDoc(f1,"📄 Document A — REFERENCE");
-    addDoc(f2,"📝 Document B — NEW (proofread this)");
-    return blocks;
-  };
-
   const buildTxt=(r)=>{
     let t=`PROOFCHECK AI — PROOFREADING REPORT\n${"=".repeat(44)}\n`;
     t+=`Date      : ${new Date().toLocaleString()}\n`;
@@ -223,30 +199,89 @@ function App(){
 
   const runCheck=async()=>{
     if(!f1||!f2){setError("Please upload both documents first.");return;}
-    if(!apiKey.trim()){setError("Please enter your Anthropic API key.");return;}
-    setError("");setReport(null);setReportTxt("");setLoading(true);setStatus("📂 Reading documents...");
+    if(!apiKey.trim()){setError("Please enter your Gemini API key.");return;}
+    setError("");setReport(null);setReportTxt("");setLoading(true);
+
     try{
+      setStatus("📂 Reading documents...");
+
+      // Read file contents
+      let text1="", text2="";
+      const parts=[];
+
+      // Build prompt text
+      const ruleText=rules.trim()||"Check spelling, grammar, formatting, and compare both documents.";
+      const prompt=
+        `You are a senior professional proofreader.\n\n`+
+        `Document A = REFERENCE (${f1.name}) — correct/approved version\n`+
+        `Document B = NEW document (${f2.name}) — needs proofreading\n\n`+
+        `Rules:\n${ruleText}\n\n`+
+        `STRICT DEDUPLICATION:\n`+
+        `1. Every unique issue appears ONCE only\n`+
+        `2. Never report same problem under two types\n`+
+        `3. Assign to most specific: spelling > grammar > formatting > style > match\n`+
+        `4. Merge issues that are the same underlying problem\n\n`+
+        `Return ONLY valid JSON, no markdown, no explanation:\n`+
+        `{"match_score":<0-100>,"overall_comment":"<2-3 sentences>","summary":{"total_issues":<n>,"spelling":<n>,"grammar":<n>,"formatting":<n>,"style":<n>},"issues":[{"type":"spelling|grammar|formatting|style|match","description":"<issue>","location":"<where>","suggestion":"<fix>"}]}`;
+
+      // Add prompt as first text part
+      parts.push({text: prompt});
+
       setStatus("🤖 AI is comparing and proofreading...");
-      const res=await fetch("https://api.anthropic.com/v1/messages",{
-        method:"POST",
-        headers:{
-          "Content-Type":"application/json",
-          "x-api-key":apiKey.trim(),
-          "anthropic-version":"2023-06-01",
-          "anthropic-dangerous-direct-browser-access":"true"
-        },
-        body:JSON.stringify({model:"claude-opus-4-5",max_tokens:2000,
-          messages:[{role:"user",content:buildContent()}]}),
-      });
-      if(!res.ok){const e=await res.json();throw new Error(e?.error?.message||"API error "+res.status);}
+
+      // Build inline_data parts for images, text for others
+      const addFilePart=async(f,label)=>{
+        parts.push({text:`\n${label}:`});
+        if(f.type.startsWith("image/")||f.type==="application/pdf"){
+          parts.push({inline_data:{mime_type:f.type,data:f.b64}});
+        } else {
+          // txt files — read as text
+          try{
+            const txt=await readAsText(f.raw);
+            parts.push({text: txt.substring(0,8000)});
+          }catch{
+            parts.push({text:`[File: ${f.name}]`});
+          }
+        }
+      };
+
+      await addFilePart(f1,"📄 Document A — REFERENCE");
+      await addFilePart(f2,"📝 Document B — NEW (proofread this)");
+
+      // Call Gemini API
+      const res=await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey.trim()}`,
+        {
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({
+            contents:[{parts}],
+            generationConfig:{temperature:0.1,maxOutputTokens:2000}
+          })
+        }
+      );
+
+      if(!res.ok){
+        const e=await res.json();
+        throw new Error(e?.error?.message||"Gemini API error: "+res.status);
+      }
+
       const data=await res.json();
-      const raw=data.content.map(b=>b.text||"").join("");
-      const result=JSON.parse(raw.replace(/```json|```/g,"").trim());
+      const raw=data.candidates?.[0]?.content?.parts?.[0]?.text||"";
+      if(!raw)throw new Error("Empty response from Gemini. Please try again.");
+
+      const clean=raw.replace(/```json|```/g,"").trim();
+      const result=JSON.parse(clean);
       result.issues=deduplicateIssues(result.issues||[]);
       result.summary.total_issues=result.issues.length;
-      setReport(result);setReportTxt(buildTxt(result));setStatus("");
-    }catch(e){setError("❌ "+e.message);}
-    finally{setLoading(false);}
+      setReport(result);
+      setReportTxt(buildTxt(result));
+      setStatus("");
+    }catch(e){
+      setError("❌ "+e.message);
+    }finally{
+      setLoading(false);
+    }
   };
 
   const reset=()=>{
@@ -269,23 +304,23 @@ function App(){
                 ProofCheck <span style={{color:C.accent}}>AI</span>
               </div>
               <div style={{fontSize:10,color:C.muted,fontFamily:"DM Mono,monospace",letterSpacing:2,marginTop:3}}>
-                AUTOMATED DOCUMENT PROOFREADING
+                AUTOMATED DOCUMENT PROOFREADING · POWERED BY GEMINI
               </div>
             </div>
           </div>
           <p style={{fontSize:13,color:C.muted,fontStyle:"italic",marginTop:8}}>
-            Upload two documents → AI compares, checks & generates a clean deduplicated report
+            Upload two documents → AI compares, checks &amp; generates a clean deduplicated report
           </p>
         </div>
 
         {/* API Key */}
         <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:20,marginBottom:22}}>
-          <div style={{fontSize:10,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:C.muted,marginBottom:10}}>
-            🔑 Anthropic API Key
+          <div style={{fontSize:10,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:C.muted,marginBottom:6}}>
+            🔑 Google Gemini API Key <span style={{color:C.green,fontWeight:400,fontSize:10}}>(Free — no credit card needed)</span>
           </div>
           <div style={{display:"flex",gap:10,marginBottom:8}}>
             <input type={showKey?"text":"password"} value={apiKey} onChange={e=>setApiKey(e.target.value)}
-              placeholder="sk-ant-api03-..."
+              placeholder="AIza..."
               style={{flex:1,padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:8,
                 background:C.surface,color:C.ink,fontSize:12,outline:"none"}}/>
             <button onClick={()=>setShowKey(!showKey)}
@@ -294,11 +329,11 @@ function App(){
               {showKey?"🙈 Hide":"👁 Show"}
             </button>
           </div>
-          <div style={{fontSize:11,color:C.muted,lineHeight:1.6}}>
-            Get a free key at{" "}
-            <a href="https://console.anthropic.com" target="_blank"
-              style={{color:C.accent}}>console.anthropic.com</a>
-            {" "}→ your key is never stored, only used for this session.
+          <div style={{fontSize:11,color:C.muted,lineHeight:1.8}}>
+            Get your free key at{" "}
+            <a href="https://aistudio.google.com/app/apikey" target="_blank"
+              style={{color:C.accent,fontWeight:600}}>aistudio.google.com</a>
+            {" "}→ Sign in with Google → Click <strong>"Get API Key"</strong> → <strong>"Create API key"</strong>
           </div>
         </div>
 
